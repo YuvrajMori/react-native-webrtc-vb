@@ -52,6 +52,8 @@ class GetUserMediaImpl {
     private Promise displayMediaPromise;
     private Intent mediaProjectionPermissionResultData;
 
+    private  VirtualBackgroundVideoProcessor videoVbProcessor;
+
     GetUserMediaImpl(WebRTCModule webRTCModule, ReactApplicationContext reactContext) {
         this.webRTCModule = webRTCModule;
         this.reactContext = reactContext;
@@ -199,7 +201,7 @@ class GetUserMediaImpl {
                 cameraEnumerator,
                 videoConstraintsMap);
 
-            videoTrack = createVideoTrack(cameraCaptureController, videoConstraintsMap.hasKey("vb"));
+            videoTrack = createVideoTrack(cameraCaptureController, videoConstraintsMap);
         }
 
         if (audioTrack == null && videoTrack == null) {
@@ -243,6 +245,33 @@ class GetUserMediaImpl {
         if (track != null && track.videoCaptureController instanceof CameraCaptureController) {
             CameraCaptureController cameraCaptureController = (CameraCaptureController) track.videoCaptureController;
             cameraCaptureController.switchCamera();
+        }
+    }
+
+    void changeVBStatus(String trackId, boolean status) {
+        TrackPrivate track = tracks.get(trackId);
+        if (track != null && videoVbProcessor != null) {
+            videoVbProcessor.setVbStatus(status);
+        }
+    }
+    void changeVbImageUri(String trackId, String uri) {
+        TrackPrivate track = tracks.get(trackId);
+        if (track != null && videoVbProcessor != null) {
+            videoVbProcessor.setVbImageUri(uri);
+        }
+    }
+
+    void changeVbBlurValue(String trackId, int blurValue) {
+        TrackPrivate track = tracks.get(trackId);
+        if (track != null && videoVbProcessor != null) {
+            videoVbProcessor.setVBBlurValue(blurValue);
+        }
+    }
+
+    void changeVbFrameSkip(String trackId, int vbFrameSkip) {
+        TrackPrivate track = tracks.get(trackId);
+        if (track != null && videoVbProcessor != null) {
+            videoVbProcessor.setVbFrameSkip(vbFrameSkip);
         }
     }
 
@@ -355,10 +384,10 @@ class GetUserMediaImpl {
         int height = displayMetrics.heightPixels;
         ScreenCaptureController screenCaptureController
             = new ScreenCaptureController(reactContext.getCurrentActivity(), width, height, mediaProjectionPermissionResultData);
-        return createVideoTrack(screenCaptureController, false);
+        return createVideoTrack(screenCaptureController, null);
     }
 
-    private VideoTrack createVideoTrack(AbstractVideoCaptureController videoCaptureController, Boolean vb) {
+    private VideoTrack createVideoTrack(AbstractVideoCaptureController videoCaptureController, final ReadableMap videoConstraintsMap) {
         videoCaptureController.initializeVideoCapturer();
 
         VideoCapturer videoCapturer = videoCaptureController.videoCapturer;
@@ -379,10 +408,8 @@ class GetUserMediaImpl {
         VideoSource videoSource = pcFactory.createVideoSource(videoCapturer.isScreencast());
         videoCapturer.initialize(surfaceTextureHelper, reactContext, videoSource.getCapturerObserver());
 
-        if(vb) {
-            VideoProcessor p = new VirtualBackgroundVideoProcessor(reactContext, surfaceTextureHelper);
-            videoSource.setVideoProcessor(p);
-        }
+        videoVbProcessor = new VirtualBackgroundVideoProcessor(reactContext, surfaceTextureHelper, videoConstraintsMap);
+        videoSource.setVideoProcessor(videoVbProcessor);
 
         String id = UUID.randomUUID().toString();
         VideoTrack track = pcFactory.createVideoTrack(id, videoSource);
